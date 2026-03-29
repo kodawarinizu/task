@@ -329,50 +329,7 @@ El campo `total` fue eliminado de `ventas` porque es un dato derivado. Se calcul
 
 ## Diagrama de relaciones
 
-```mermaid
-erDiagram
-    regiones ||--o{ comunas : "tiene"
-    comunas ||--o{ bibliotecas : "tiene"
-
-    bibliotecas ||--o{ usuarios : "tiene"
-    bibliotecas ||--o{ ejemplares : "posee"
-    bibliotecas ||--o{ recursos : "posee"
-
-    usuarios ||--o{ miembros : "puede ser"
-    usuarios ||--o{ usuarios_roles : "tiene"
-    usuarios ||--o{ ventas : "registra"
-
-    roles ||--o{ usuarios_roles : ""
-    roles ||--o{ roles_permisos : ""
-    permisos ||--o{ roles_permisos : ""
-
-    libros ||--o{ autores_libros : ""
-    libros ||--o{ categorias_libros : ""
-    libros ||--o{ generos_libros : ""
-    libros ||--o{ ejemplares : "tiene"
-    libros ||--o{ reservas_libros : "reservado en"
-    libros ||--o{ detalle_ventas : "vendido en"
-
-    autores ||--o{ autores_libros : ""
-    categorias ||--o{ categorias_libros : ""
-    generos ||--o{ generos_libros : ""
-
-    ejemplares ||--o{ prestamos : "prestado en"
-
-    miembros ||--o{ prestamos : "solicita"
-    miembros ||--o{ reservas : "hace"
-
-    prestamos ||--o{ multas : "genera"
-
-    reservas ||--o{ reservas_libros : "especializa"
-    reservas ||--o{ reservas_recursos : "especializa"
-
-    tipo_recurso ||--o{ recursos : "clasifica"
-    recursos ||--o{ reservas_recursos : "reservado en"
-
-    ventas ||--o{ detalle_ventas : "tiene"
-```
-
+![Modelo ERD Biblioteca](../docs/modelo.png)
 ---
 
 ## DDL completo
