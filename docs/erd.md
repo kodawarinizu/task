@@ -319,7 +319,7 @@ El campo `total` fue eliminado de `ventas` porque es un dato derivado. Se calcul
 ### Tipos de datos
 - Fechas como `DATE` o `TIMESTAMP`, nunca `TEXT`
 - Montos como `NUMERIC(10,2)` para soportar decimales en otras monedas
-- Barcodes como `TEXT` porque son identificadores, no números — un `INT` truncaría ceros a la izquierda
+- Barcodes como `TEXT` porque son identificadores, no números
 - PKs con `GENERATED ALWAYS AS IDENTITY`, no `SERIAL`
 
 ### Geografía del usuario
