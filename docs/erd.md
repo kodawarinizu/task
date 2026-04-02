@@ -4,10 +4,46 @@
 
 ## Índice
 
-1. [Descripción por tabla](#descripción-por-tabla)
-2. [Decisiones de diseño](#decisiones-de-diseño)
-3. [Diagrama de relaciones](#diagrama-de-relaciones)
-4. [DDL completo](#ddl-completo)
+1. [Contexto del sistema](#contexto-del-sistema)
+2. [Grupos funcionales](#grupos-funcionales)
+3. [Descripción por tabla](#descripción-por-tabla)
+4. [Decisiones de diseño](#decisiones-de-diseño)
+5. [Diagrama de relaciones](#diagrama-de-relaciones)
+6. [DDL completo](#ddl-completo)
+
+---
+
+## Contexto del sistema
+
+Este modelo representa un sistema de gestión para una red de bibliotecas públicas distribuidas geográficamente a lo largo de Chile. No es una biblioteca única: el sistema contempla múltiples sedes, cada una con su propio inventario físico, personal y recursos reservables.
+
+El modelo cubre cinco dominios operacionales:
+
+- **Catálogo bibliográfico**: qué libros existen como obras (título, autores, géneros, categorías)
+- **Inventario físico**: qué copias existen en qué sede y en qué estado
+- **Circulación**: préstamos, devoluciones y multas por atraso
+- **Reservas**: tanto de títulos bibliográficos como de espacios físicos (salas, equipos)
+- **Ventas**: venta directa de libros al público, gestionada por usuarios del sistema
+
+La separación entre estos dominios es intencional: permite que cada uno evolucione independientemente sin romper los demás.
+
+---
+
+## Grupos funcionales
+
+El modelo se divide en siete grupos, cada uno con una responsabilidad clara:
+
+| Grupo | Propósito |
+|---|---|
+| Geografía | Organizar las sedes por región y comuna |
+| Biblioteca | Sede física como entidad operacional central |
+| Catálogo | Representar los libros como obras lógicas |
+| Inventario físico | Gestionar las copias reales de cada libro |
+| Usuarios y acceso | Cuentas del sistema, membresías y permisos |
+| Circulación | Préstamos, devoluciones y multas |
+| Reservas | Reserva de títulos y recursos físicos |
+| Recursos | Espacios y equipos reservables que no son libros |
+| Ventas | Transacciones de venta al público |
 
 ---
 
@@ -15,8 +51,11 @@
 
 ### Geografía
 
+El sistema opera en múltiples comunas del país. La jerarquía geográfica (`regiones → comunas → bibliotecas`) permite generar reportes territoriales (cuántas bibliotecas hay por región, qué comunas no tienen cobertura, etc.) sin depender de texto libre.
+
 #### `regiones`
-Contenedor geográfico de más alto nivel.
+
+Contenedor geográfico de más alto nivel. Su único rol es agrupar comunas.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -24,6 +63,7 @@ Contenedor geográfico de más alto nivel.
 | nombre | TEXT | NOT NULL | Nombre de la región |
 
 #### `comunas`
+
 Unidad geográfica que agrupa bibliotecas. Pertenece a una región.
 
 | Columna | Tipo | Restricciones | Descripción |
@@ -37,7 +77,8 @@ Unidad geográfica que agrupa bibliotecas. Pertenece a una región.
 ### Biblioteca
 
 #### `bibliotecas`
-Entidad central de operación física. Todo usuario, ejemplar y recurso pertenece a una biblioteca.
+
+Entidad central del sistema. Todo usuario, ejemplar y recurso pertenece a una biblioteca específica. La fecha de creación permite, por ejemplo, calcular antigüedad de la sede o filtrar reportes históricos.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -51,17 +92,21 @@ Entidad central de operación física. Todo usuario, ejemplar y recurso pertenec
 
 ### Catálogo
 
+El catálogo representa los libros como **obras intelectuales**, no como objetos físicos. Esta distinción es fundamental: un mismo libro puede tener diez copias distribuidas en tres sedes, pero existe una sola vez en el catálogo.
+
 #### `libros`
-Título lógico. Representa el libro como obra, no como objeto físico.
+
+Título lógico. El ISBN es nullable porque no todos los libros tienen uno asignado (ediciones antiguas, material interno, etc.).
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | id_libro | INT | PK, IDENTITY | Identificador único |
 | titulo | TEXT | NOT NULL | Título del libro |
-| ISBN | VARCHAR(17) | NULL | Código ISBN |
+| ISBN | VARCHAR(17) | NULL | Código ISBN (puede estar ausente) |
 
 #### `autores`
-Personas que escribieron uno o más libros.
+
+Personas que escribieron uno o más libros. Se mantiene como entidad separada para evitar duplicación de nombres y permitir búsquedas por autor.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -69,7 +114,8 @@ Personas que escribieron uno o más libros.
 | nombre | TEXT | NOT NULL | Nombre del autor |
 
 #### `autores_libros`
-Tabla de unión N:M entre libros y autores.
+
+Tabla de unión N:M entre libros y autores. Un libro puede tener varios autores; un autor puede haber escrito varios libros.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -78,7 +124,8 @@ Tabla de unión N:M entre libros y autores.
 | id_autor | INT | FK → autores | Autor relacionado |
 
 #### `categorias`
-Clasificación temática de los libros.
+
+Clasificación temática (ej: "Ciencias", "Historia", "Tecnología"). Permite filtrar el catálogo por área de conocimiento.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -86,7 +133,8 @@ Clasificación temática de los libros.
 | nombre | TEXT | NOT NULL | Nombre de la categoría |
 
 #### `categorias_libros`
-Tabla de unión N:M entre libros y categorías.
+
+Tabla de unión N:M entre libros y categorías. Un libro puede pertenecer a varias categorías.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -95,7 +143,8 @@ Tabla de unión N:M entre libros y categorías.
 | id_categoria | INT | FK → categorias | Categoría relacionada |
 
 #### `generos`
-Clasificación de género literario de los libros.
+
+Clasificación de género literario (ej: "Novela", "Ensayo", "Poesía"). A diferencia de categorías, el género es una propiedad estética del texto, no temática. Se mantiene separado porque un mismo libro puede tener género "Novela" y categoría "Historia".
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -103,6 +152,7 @@ Clasificación de género literario de los libros.
 | nombre | TEXT | NOT NULL, UNIQUE | Nombre del género |
 
 #### `generos_libros`
+
 Tabla de unión N:M entre libros y géneros.
 
 | Columna | Tipo | Restricciones | Descripción |
@@ -116,22 +166,28 @@ Tabla de unión N:M entre libros y géneros.
 ### Inventario físico
 
 #### `ejemplares`
-Copia física de un libro. Es la unidad real que se presta. La cantidad disponible de un título se calcula contando sus ejemplares con estado `disponible`.
+
+Copia física de un libro. Es la unidad real que se presta. La cantidad disponible de un título se calcula contando sus ejemplares con estado `disponible`; no existe un contador separado.
+
+El `barcode` (Barcode 128) es el identificador físico que se escanea en el mesón. El estado registra el ciclo de vida del objeto: disponible → prestado → devuelto / dañado / perdido.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | id_ejemplar | INT | PK, IDENTITY | Identificador único |
 | id_libro | INT | FK → libros | Título al que pertenece |
 | id_biblioteca | INT | FK → bibliotecas | Biblioteca que lo posee |
-| barcode | TEXT | NOT NULL, UNIQUE | Código de barras físico (Barcode 128) |
+| barcode | TEXT | NOT NULL, UNIQUE | Código de barras físico |
 | estado | TEXT | NOT NULL | disponible / prestado / dañado / perdido |
 
 ---
 
 ### Usuarios y acceso
 
+El sistema distingue dos conceptos que en otros sistemas suelen confundirse: **usuario** (cuenta del sistema) y **miembro** (persona con carnet de préstamo). No todo usuario es miembro; un bibliotecario tiene cuenta pero puede no tener carnet.
+
 #### `usuarios`
-Cuenta del sistema. Puede ser bibliotecario, vendedor u otro rol. Pertenece a una biblioteca.
+
+Cuenta del sistema. Puede ser bibliotecario, vendedor, administrador u otro rol. Pertenece a una biblioteca, lo que determina a qué sede tiene acceso operacional.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -142,18 +198,20 @@ Cuenta del sistema. Puede ser bibliotecario, vendedor u otro rol. Pertenece a un
 | id_biblioteca | INT | FK → bibliotecas | Biblioteca a la que pertenece |
 
 #### `miembros`
-Perfil de membresía de un usuario. No todo usuario es miembro. Un miembro siempre tiene un usuario asociado.
+
+Perfil de membresía de un usuario. Un miembro siempre tiene un usuario asociado, pero la FK vive en `miembros`, no en `usuarios`. Esto permite que existan usuarios sin membresía sin introducir NULLs estructurales.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | id_miembro | INT | PK, IDENTITY | Identificador único |
 | id_usuario | INT | FK → usuarios | Usuario asociado |
-| barcode | TEXT | NOT NULL, UNIQUE | Código de barras del carnet (Barcode 128) |
+| barcode | TEXT | NOT NULL, UNIQUE | Código de barras del carnet |
 | estado | TEXT | NOT NULL | activo / suspendido / vencido |
 | fecha_miembro | DATE | NOT NULL | Fecha de inicio de membresía |
 
 #### `roles`
-Agrupador de permisos. Un usuario puede tener múltiples roles.
+
+Agrupador de permisos. En lugar de asignar permisos directamente a usuarios, se asignan roles. Un usuario puede tener múltiples roles (ej: "bibliotecario" + "vendedor").
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -161,7 +219,8 @@ Agrupador de permisos. Un usuario puede tener múltiples roles.
 | nombre | TEXT | NOT NULL, UNIQUE | Nombre del rol |
 
 #### `permisos`
-Acción o recurso autorizado. Se asigna a roles, no directamente a usuarios.
+
+Acción o recurso autorizado dentro del sistema. El diseño sigue el patrón RBAC (Role-Based Access Control): los permisos se asignan a roles, no a usuarios individuales, lo que simplifica la administración.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -169,6 +228,7 @@ Acción o recurso autorizado. Se asigna a roles, no directamente a usuarios.
 | nombre | TEXT | NOT NULL, UNIQUE | Nombre del permiso |
 
 #### `usuarios_roles`
+
 Tabla de unión N:M entre usuarios y roles.
 
 | Columna | Tipo | Restricciones | Descripción |
@@ -178,6 +238,7 @@ Tabla de unión N:M entre usuarios y roles.
 | id_role | INT | FK → roles | Rol relacionado |
 
 #### `roles_permisos`
+
 Tabla de unión N:M entre roles y permisos.
 
 | Columna | Tipo | Restricciones | Descripción |
@@ -190,8 +251,11 @@ Tabla de unión N:M entre roles y permisos.
 
 ### Circulación
 
+La circulación es el núcleo operacional de la biblioteca: registra qué ejemplar físico está en manos de qué miembro, desde cuándo, hasta cuándo, y qué pasa si no se devuelve a tiempo.
+
 #### `prestamos`
-Registra el préstamo de un ejemplar físico a un miembro.
+
+Registra el préstamo de un ejemplar físico a un miembro. La separación entre `fecha_devolucion` (esperada) y `fecha_devolucion_real` (efectiva) permite detectar retrasos sin borrar la fecha original pactada. El estado `vencido` puede calcularse en el código comparando fechas, pero tenerlo en la tabla facilita queries directas sin lógica adicional.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -204,7 +268,8 @@ Registra el préstamo de un ejemplar físico a un miembro.
 | estado | TEXT | NOT NULL | activo / devuelto / vencido |
 
 #### `multas`
-Se genera cuando un préstamo se devuelve fuera de plazo.
+
+Se genera cuando un préstamo se devuelve fuera de plazo. La multa referencia al préstamo (no al miembro directamente) para mantener el contexto completo: cuándo ocurrió, qué ejemplar, etc. El monto se calcula externamente según la política de la biblioteca.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -217,10 +282,11 @@ Se genera cuando un préstamo se devuelve fuera de plazo.
 
 ### Reservas
 
-Las reservas usan herencia de tabla: `reservas` es la tabla madre con atributos comunes, y `reservas_libros` / `reservas_recursos` son las especializaciones.
+Las reservas usan **herencia de tabla**: `reservas` es la tabla madre con atributos comunes, y `reservas_libros` / `reservas_recursos` son las especializaciones. Esto evita una tabla monolítica con columnas nullable según el tipo.
 
 #### `reservas`
-Tabla madre. Contiene los atributos comunes a cualquier tipo de reserva.
+
+Tabla madre. Contiene los atributos comunes a cualquier tipo de reserva: quién reserva, cuándo, y en qué estado está.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -230,7 +296,8 @@ Tabla madre. Contiene los atributos comunes a cualquier tipo de reserva.
 | estado | TEXT | NOT NULL | pendiente / confirmada / cancelada |
 
 #### `reservas_libros`
-Especialización para reserva de un título bibliográfico.
+
+Especialización para reserva de un título bibliográfico. La `fecha_expiracion` define hasta cuándo la reserva es válida antes de liberarse para otros miembros.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -240,7 +307,8 @@ Especialización para reserva de un título bibliográfico.
 | fecha_expiracion | DATE | NOT NULL | Hasta cuándo es válida la reserva |
 
 #### `reservas_recursos`
-Especialización para reserva de un espacio o recurso físico.
+
+Especialización para reserva de un espacio o recurso físico (sala de reuniones, computador, proyector). Usa `TIMESTAMP` en lugar de `DATE` porque las reservas de recursos tienen hora de inicio y fin, no solo fecha.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -255,7 +323,8 @@ Especialización para reserva de un espacio o recurso físico.
 ### Recursos no bibliográficos
 
 #### `tipo_recurso`
-Clasificador de recursos (sala, equipo, computador, etc.).
+
+Clasificador de recursos (sala, equipo, computador, etc.). Permite agrupar y filtrar recursos sin usar texto libre en `recursos.estado`.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -263,7 +332,8 @@ Clasificador de recursos (sala, equipo, computador, etc.).
 | nombre | TEXT | NOT NULL | Nombre del tipo |
 
 #### `recursos`
-Elemento reservable que no es un libro. Pertenece a una biblioteca.
+
+Elemento reservable que no es un libro. Pertenece a una biblioteca. El estado registra su disponibilidad operacional.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -278,7 +348,8 @@ Elemento reservable que no es un libro. Pertenece a una biblioteca.
 ### Ventas
 
 #### `ventas`
-Registra una transacción de venta de libros. El total se calcula en el código desde los detalles.
+
+Registra una transacción de venta de libros. El usuario que la registra (no el miembro) es el responsable de la operación, lo que permite auditoría de caja por empleado.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -287,7 +358,8 @@ Registra una transacción de venta de libros. El total se calcula en el código 
 | fecha | DATE | NOT NULL | Fecha de la transacción |
 
 #### `detalle_ventas`
-Línea de una venta. Asocia un libro con cantidad y precio al momento de la venta.
+
+Línea de una venta. El `precio_unitario` se guarda en el detalle (no se toma del libro) porque el precio puede cambiar con el tiempo. Guardar el precio al momento de la venta preserva la integridad histórica del registro.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
@@ -301,35 +373,62 @@ Línea de una venta. Asocia un libro con cantidad y precio al momento de la vent
 
 ## Decisiones de diseño
 
-### `Libro` vs `Ejemplar`
-El libro es el título lógico (la obra). El ejemplar es la copia física. La cantidad disponible de un título no se guarda como atributo — se calcula contando ejemplares con estado `disponible`. Esto evita inconsistencias entre un contador y el estado real del inventario.
+### Libro vs Ejemplar: el catálogo y el inventario son cosas distintas
 
-### `Usuario` vs `Miembro`
-Son entidades separadas por diseño. Un usuario es una cuenta del sistema (bibliotecario, vendedor, administrador). Un miembro es quien tiene carnet y puede pedir préstamos. Un usuario puede existir sin ser miembro, pero un miembro siempre tiene un usuario asociado. La FK vive en `miembros`, no en `usuarios`.
+El error más común en sistemas de biblioteca es mezclar la obra con el objeto físico. Aquí se separan en dos tablas con propósitos distintos:
 
-### Relaciones N:M explícitas
-`autores_libros`, `categorias_libros` y `generos_libros` son tablas de unión explícitas con PK propia. Esto permite agregar atributos a la relación en el futuro sin cambiar el modelo.
+- `libros` representa el título intelectual: "Don Quijote de la Mancha". Existe una sola vez en el catálogo.
+- `ejemplares` representa cada copia física: el ejemplar #42, en la Biblioteca de Providencia, con estado `disponible`.
 
-### Herencia en reservas
-`reservas` actúa como tabla madre con los atributos comunes. `reservas_libros` y `reservas_recursos` son especializaciones con sus propios atributos. Esto evita campos NULL opcionales en una sola tabla y mantiene integridad referencial en cada rama.
+La cantidad disponible de un título **no se guarda como columna** — se calcula en tiempo de consulta contando los ejemplares con `estado = 'disponible'`. Guardar un contador separado crea el riesgo de que diverge del inventario real si alguna actualización falla a medias.
 
-### Total en ventas
-El campo `total` fue eliminado de `ventas` porque es un dato derivado. Se calcula en el código como `SUM(cantidad * precio_unitario)` desde `detalle_ventas`. Guardarlo como columna crea riesgo de inconsistencia si algún detalle cambia.
+### Usuario vs Miembro: dos roles con necesidades diferentes
+
+Un sistema de biblioteca tiene al menos dos tipos de personas: quienes operan el sistema (bibliotecarios, cajeros) y quienes lo usan (personas con carnet). Fusionarlos en una sola tabla obligaría a tener columnas nullable para los atributos que aplican solo a uno u otro.
+
+La separación es explícita:
+- `usuarios`: cuenta del sistema, asociada a una sede.
+- `miembros`: perfil de membresía, siempre asociado a un usuario existente.
+
+La FK vive en `miembros` porque la relación es opcional desde el lado del usuario: un usuario puede no ser miembro, pero un miembro siempre tiene usuario.
+
+### Relaciones N:M como tablas explícitas
+
+Las relaciones entre libros, autores, categorías y géneros son todas N:M y se modelan con tablas de unión explícitas (`autores_libros`, `categorias_libros`, `generos_libros`). Cada una tiene PK propia, lo que permite agregar atributos a la relación en el futuro (ej: `rol_autor` en `autores_libros` para distinguir autor principal de coautor) sin cambiar la estructura base.
+
+### Herencia en reservas: evitar la tabla comodín
+
+Una sola tabla `reservas` con campos como `id_libro`, `id_recurso`, `fecha_expiracion`, `fecha_inicio`, `fecha_fin` sería una tabla con NULLs estructurales: si es una reserva de libro, los campos de horario quedan vacíos; si es de sala, `id_libro` queda vacío. Esto es una señal de diseño deficiente.
+
+La solución es herencia de tabla: `reservas` concentra lo común (quién, cuándo, estado), y cada especialización (`reservas_libros`, `reservas_recursos`) agrega solo lo que le corresponde. La integridad referencial se mantiene en cada rama.
+
+### Total en ventas: datos derivados no se almacenan
+
+El campo `total` fue eliminado de `ventas` porque es un dato derivado: `SUM(cantidad * precio_unitario)` calculado desde `detalle_ventas`. Almacenarlo crea un punto de inconsistencia: si algún detalle se modifica y el total no se actualiza, el registro queda corrupto. Los datos derivados se calculan en el código, no se guardan en la base.
+
+### Precio histórico en detalle de ventas
+
+El `precio_unitario` se guarda en `detalle_ventas` (no en `libros`) porque el precio de un libro puede cambiar. Si la venta referenciara el precio actual del libro, los registros históricos quedarían alterados retroactivamente cada vez que el precio se actualice. Almacenar el precio al momento de la venta garantiza que el historial de transacciones es inmutable.
+
+### Geografía del usuario: la relación relevante es con la sede
+
+`usuarios` no tiene `id_comuna` directamente. La ubicación geográfica del usuario se deriva navegando `usuario → biblioteca → comuna`. La relación operacionalmente significativa es a qué sede pertenece el usuario, no en qué zona geográfica vive. Agregar `id_comuna` al usuario sería redundante y potencialmente inconsistente con la comuna de su biblioteca.
 
 ### Tipos de datos
-- Fechas como `DATE` o `TIMESTAMP`, nunca `TEXT`
-- Montos como `NUMERIC(10,2)` para soportar decimales en otras monedas
-- Barcodes como `TEXT` porque son identificadores, no números
-- PKs con `GENERATED ALWAYS AS IDENTITY`, no `SERIAL`
 
-### Geografía del usuario
-`usuarios` no tiene `id_comuna` directamente. La comuna se deriva navegando `usuario → biblioteca → comuna`. La relación relevante para el negocio es a qué biblioteca pertenece el usuario, no en qué comuna vive.
+| Patrón | Decisión | Motivo |
+|---|---|---|
+| Fechas | `DATE` o `TIMESTAMP` | Nunca `TEXT`; permite comparación y aritmética de fechas |
+| Montos | `NUMERIC(10,2)` | Precisión decimal; soporta monedas distintas al peso |
+| Barcodes | `TEXT` | Son identificadores, no números; no se opera con ellos matemáticamente |
+| PKs | `GENERATED ALWAYS AS IDENTITY` | Estándar SQL; más explícito y controlable que `SERIAL` |
 
 ---
 
 ## Diagrama de relaciones
 
 ![Modelo ERD Biblioteca](../docs/modelo.png)
+
 ---
 
 ## DDL completo
